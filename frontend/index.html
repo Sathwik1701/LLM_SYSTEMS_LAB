@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Systems Lab | Arbitrary N-Model Comparative Benchmarking & Inspection Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --border-color: #1e293b;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg-dark);
+      color: #e2e8f0;
+    }
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-panel {
+      background: rgba(13, 19, 33, 0.8);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.25);
+    }
+    .glow-violet {
+      box-shadow: 0 0 25px -5px rgba(139, 92, 246, 0.25);
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-20">
+
+  <!-- Datalist for Provider Base URLs -->
+  <datalist id="providerPresets">
+    <option value="https://api-inference.huggingface.co/v1/">Hugging Face Inference API (Default)</option>
+    <option value="https://integrate.api.nvidia.com/v1">NVIDIA NIM / API Catalog</option>
+    <option value="http://localhost:8000/v1/">vLLM Local Server</option>
+    <option value="http://localhost:11434/v1/">Ollama Local API</option>
+    <option value="https://api.openai.com/v1/">OpenAI API</option>
+    <option value="https://api.groq.com/openai/v1/">Groq Fast Inference</option>
+    <option value="mock://localhost">Local Mock Simulation</option>
+  </datalist>
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 sticky top-0 z-50 backdrop-blur-md px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-violet-600 flex items-center justify-center font-mono font-bold text-white shadow-lg shadow-cyan-500/20">
+          λᴺ
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            LLM Systems Lab <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/50 font-mono">v3.0-DYNAMIC-N</span>
+          </h1>
+          <p class="text-xs text-slate-400">Arbitrary Multi-Model Slot Benchmarking, Live SSE Telemetry & Dynamic Metadata Inspection</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-xs font-mono">
+        <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-2">
+          <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          Slots: <span id="slotCountBadge" class="text-cyan-400 font-semibold">2 Active</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-violet-950/50 border border-violet-800/40 text-violet-300">
+          OpenAI-Compatible SSE
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-6 pt-8 space-y-8">
+
+    <!-- Status Alert Banner -->
+    <div id="statusBanner" class="p-4 rounded-xl glass-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-slate-800 transition-all duration-300">
+      <div class="flex items-center gap-3">
+        <div id="statusDot" class="h-8 w-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center font-mono text-sm shrink-0">
+          ℹ
+        </div>
+        <div>
+          <h3 id="statusTitle" class="text-sm font-semibold text-slate-200">Arbitrary Model Comparison Workspace Ready</h3>
+          <p id="statusDesc" class="text-xs text-slate-400">Configure any number of model slots (Qwen, Llama, DeepSeek, Mistral, Gemma). Fetch metadata and stream telemetry concurrently.</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="text-xs font-mono px-3 py-1 rounded-md bg-slate-900 text-slate-400 border border-slate-800 shrink-0 self-start sm:self-auto">
+        STANDBY
+      </div>
+    </div>
+
+    <!-- 1. EXECUTION BAR & GLOBAL CONTROLS -->
+    <section class="p-6 rounded-2xl glass-panel space-y-5">
+      <div class="border-b border-slate-800/60 pb-3 flex justify-between items-center">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="text-cyan-400">01.</span> Execution Bar & Global Parameters
+          </h2>
+          <p class="text-xs text-slate-400">User prompt, system instructions, and sampling runtime hyperparameters</p>
+        </div>
+        <button id="toggleSystemPromptBtn" class="text-xs font-mono text-slate-400 hover:text-cyan-400 transition-colors">
+          + Add System Prompt
+        </button>
+      </div>
+
+      <!-- System Prompt (Collapsible) -->
+      <div id="systemPromptContainer" class="hidden space-y-1.5">
+        <label class="text-xs font-medium text-slate-300 flex justify-between">
+          <span>System Prompt</span>
+          <span class="text-[11px] text-slate-500 font-mono">Role: System</span>
+        </label>
+        <textarea id="globalSystemPrompt" rows="1" 
+                  class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+                  placeholder="e.g. You are a distributed systems architect. Answer concisely."></textarea>
+      </div>
+
+      <!-- User Prompt -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-slate-300 flex justify-between">
+          <span>Benchmark User Prompt</span>
+          <span class="text-[11px] text-cyan-400 font-mono">Dispatched Concurrently to All Slots</span>
+        </label>
+        <textarea id="globalPrompt" rows="2" 
+                  class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none">Explain quantum computing in 3 sentences.</textarea>
+      </div>
+
+      <!-- Global HF Token -->
+      <div class="pt-1">
+        <div class="space-y-1.5 max-w-xl">
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-medium text-slate-300">Hugging Face Token (Fallback)</span>
+            <a href="https://huggingface.co/settings/tokens" target="_blank" class="text-[10px] text-cyan-400 hover:underline font-mono">Get Token ↗</a>
+          </div>
+          <div class="relative flex items-center">
+            <input id="globalHfToken" type="password" value="" placeholder="Optional fallback (or set HF_TOKEN in .env)"
+                   class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white pr-14 focus:outline-none focus:border-cyan-500">
+            <button id="toggleGlobalHfTokenBtn" type="button" class="absolute right-1.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 hover:text-white rounded bg-slate-800">
+              SHOW
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
+        <div>
+          <button id="inspectAllMetadataBtn" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-mono transition-all border border-slate-700">
+            Inspect All Metadata
+          </button>
+        </div>
+        <div>
+          <button id="runBenchmarkBtn" class="px-7 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white font-bold text-xs font-mono transition-all shadow-lg shadow-cyan-500/25">
+            Run Benchmark
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. DYNAMIC MODEL SLOT CONFIGURATION FORM -->
+    <section class="space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="text-cyan-400">02.</span> Dynamic Model Slot Configuration
+          </h2>
+          <p class="text-xs text-slate-400">Add or configure arbitrary models and endpoints for simultaneous profiling</p>
+        </div>
+        <button id="addSlotBtn" class="px-4 py-2 rounded-xl bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-xs font-mono transition-all flex items-center gap-2 shadow-sm">
+          Add Model Slot
+        </button>
+      </div>
+
+      <!-- Container where slots are rendered dynamically -->
+      <div id="slotsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Rendered dynamically via JavaScript -->
+      </div>
+    </section>
+
+    <!-- 3. COMPARATIVE OUTPUT VIEW (SIDE-BY-SIDE METRICS & STREAMING TEXT) -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="text-cyan-400">03.</span> Comparative Output & Live Telemetry
+          </h2>
+          <p class="text-xs text-slate-400">Real-time side-by-side metric cards, static architecture parameters, and raw streaming output</p>
+        </div>
+        <span id="elapsedGlobalTimer" class="text-xs font-mono text-cyan-400">Elapsed: 0.00s</span>
+      </div>
+
+      <!-- Container where output columns are rendered dynamically -->
+      <div id="outputsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Rendered dynamically via JavaScript -->
+      </div>
+    </section>
+
+    <!-- 4. MODULAR ARCHITECTURAL DIFF CARDS & VISUAL BLOCK GENERATION -->
+    <section class="space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="text-cyan-400">04.</span> Modular Architectural Diff & Topology Cards
+          </h2>
+          <p class="text-xs text-slate-400">Deterministic comparison across attention topology, KV cache footprint, layer recipes, and scale</p>
+        </div>
+        <div id="diffModelPairSelector" class="flex items-center gap-2">
+          <!-- Dynamically populated or pair indicator -->
+        </div>
+      </div>
+
+      <!-- Container where modular diff cards are rendered -->
+      <div id="diffCardsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Rendered dynamically via JavaScript: AttentionDiffCard, KVCacheFootprintCard, LayerRecipeCard, ScaleAndParamsCard -->
+      </div>
+    </section>
+
+    <!-- 5. ATTRIBUTE-BY-ROW COMPARATIVE BREAKDOWN MATRIX -->
+    <section class="p-6 rounded-2xl glass-panel space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="text-cyan-400">05.</span> Architectural Comparison Matrix (Attribute-by-Row)
+          </h2>
+          <p class="text-xs text-slate-400">Comprehensive feature-by-feature evaluation comparing all configured models side-by-side</p>
+        </div>
+        <div class="text-xs font-mono text-slate-400">
+          Horizontal Direct Contrast
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono border-collapse">
+          <thead>
+            <tr id="matrixHeaderRow" class="border-b border-slate-800 bg-slate-900/90 text-slate-300">
+              <th class="p-3.5 w-64 uppercase tracking-wider text-slate-400 font-semibold">Architectural Feature</th>
+              <!-- Column headers appended dynamically -->
+            </tr>
+          </thead>
+          <tbody id="matrixTbody" class="divide-y divide-slate-800/60 text-slate-300">
+            <!-- Rows populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    // State: Array of arbitrary ModelSlot objects - starts with clean blank slot
+    let slots = [
+      {
+        id: "slot_0",
+        modelId: "",
+        apiBase: "",
+        apiKey: "",
+        metadata: null,
+        metrics: null,
+        streamText: "",
+        status: "IDLE"
+      }
+    ];
+
+    let nextSlotCounter = 1;
+
+    function renderSlots() {
+      const container = document.getElementById('slotsContainer');
+      container.innerHTML = '';
+
+      slots.forEach((slot, index) => {
+        const card = document.createElement('div');
+        card.className = "p-5 rounded-2xl glass-panel space-y-4 border-t-2 border-t-cyan-500 relative flex flex-col justify-between";
+        card.id = `card_${slot.id}`;
+
+        const shortName = slot.modelId ? (slot.modelId.split('/').pop() || slot.modelId) : `Model Slot #${index + 1}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="h-6 w-6 rounded-lg bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono font-bold text-xs flex items-center justify-center">#${index + 1}</span>
+              <span class="text-sm font-bold text-white truncate max-w-[170px]" id="label_${slot.id}">${shortName}</span>
+            </div>
+            ${slots.length > 1 ? `
+              <button class="text-[11px] font-mono text-red-400 hover:text-red-300 px-2 py-0.5 rounded bg-red-950/40 border border-red-800/40" onclick="removeSlot('${slot.id}')">
+                Remove
+              </button>
+            ` : ''}
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div class="space-y-1">
+              <label class="text-[11px] font-medium text-slate-300 flex justify-between">
+                <span>Model ID / Repo Path</span>
+                <span class="text-[10px] text-cyan-400 font-mono">Hugging Face Hub</span>
+              </label>
+              <input type="text" value="${slot.modelId}" id="modelId_${slot.id}"
+                     class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
+                     placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct" oninput="updateSlotField('${slot.id}', 'modelId', this.value)">
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-[11px] font-medium text-slate-300 flex justify-between">
+                <span>Provider / Base URL</span>
+                <span class="text-[10px] text-slate-500 font-mono">OpenAI Compatible</span>
+              </label>
+              <input type="text" list="providerPresets" value="${slot.apiBase}" id="apiBase_${slot.id}"
+                     class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
+                     placeholder="https://api-inference.huggingface.co/v1/" oninput="updateSlotField('${slot.id}', 'apiBase', this.value)">
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-[11px] font-medium text-slate-300 flex justify-between">
+                <span>API Key / HF Token</span>
+                <span class="text-[10px] text-slate-500 font-mono">Blank = Uses Global Token</span>
+              </label>
+              <div class="relative flex items-center">
+                <input type="password" value="${slot.apiKey}" id="apiKey_${slot.id}"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white pr-14 focus:outline-none focus:border-cyan-500"
+                       placeholder="Bearer key or token" oninput="updateSlotField('${slot.id}', 'apiKey', this.value)">
+                <button type="button" class="absolute right-1.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 hover:text-white rounded bg-slate-800"
+                        onclick="toggleKeyVisibility('apiKey_${slot.id}', this)">
+                  SHOW
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2 flex justify-between items-center text-[11px] font-mono border-t border-slate-800/60">
+            <button class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    onclick="inspectSlotMetadata('${slot.id}')">
+              Inspect Metadata
+            </button>
+            <span class="text-slate-500 text-[10px]" id="metaStatus_${slot.id}">
+              ${slot.metadata ? '✓ Loaded' : 'Awaiting check'}
+            </span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('slotCountBadge').textContent = `${slots.length} Active`;
+      renderOutputs();
+      renderDiffCards();
+      renderMatrix();
+    }
+
+    // Helper: Generate structured SVG Block Diagram based on architecture template
+    function getArchitectureSvg(meta) {
+      if (!meta) {
+        return `
+          <svg viewBox="0 0 320 60" class="w-full h-14 text-slate-600 font-mono text-[9px]">
+            <rect x="10" y="10" width="300" height="40" rx="8" fill="#0f172a" stroke="#334155" stroke-dasharray="4 4"/>
+            <text x="160" y="34" text-anchor="middle" fill="#64748b">Awaiting Architecture Metadata</text>
+          </svg>
+        `;
+      }
+
+      const layers = meta.num_hidden_layers || 32;
+      const hidden = meta.hidden_size || 4096;
+      const qHeads = meta.num_attention_heads || 32;
+      const kvHeads = meta.num_key_value_heads || 8;
+      const tpl = meta.architecture_template || 'llama-gqa-dense';
+
+      if (tpl === 'deepseek-mla-moe') {
+        const experts = meta.num_experts || 256;
+        const activeExp = meta.num_active_experts || 8;
+        return `
+          <svg viewBox="0 0 340 75" class="w-full h-18 text-cyan-300 font-mono text-[9px]">
+            <!-- Latent Attention Box -->
+            <rect x="5" y="10" width="100" height="55" rx="6" fill="#082f49" stroke="#0284c7" stroke-width="1.2"/>
+            <text x="55" y="26" text-anchor="middle" fill="#38bdf8" font-weight="bold">MLA Latent</text>
+            <text x="55" y="40" text-anchor="middle" fill="#94a3b8">d_c=512 | RoPE=64</text>
+            <text x="55" y="54" text-anchor="middle" fill="#0284c7">${layers} Layers</text>
+
+            <path d="M 105 37 L 120 37" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <!-- Router / Gate -->
+            <polygon points="120,20 155,37 120,54" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.2"/>
+            <text x="133" y="40" text-anchor="middle" fill="#a5b4fc" font-size="7">Gate</text>
+
+            <path d="M 155 37 L 170 37" stroke="#6366f1" stroke-width="1.5"/>
+
+            <!-- Fine-Grained MoE Expert Bank -->
+            <rect x="170" y="10" width="165" height="55" rx="6" fill="#311042" stroke="#a855f7" stroke-width="1.2"/>
+            <text x="252" y="26" text-anchor="middle" fill="#c084fc" font-weight="bold">Sparse MoE Bank</text>
+            <text x="252" y="40" text-anchor="middle" fill="#e9d5ff">Top-${activeExp} / ${experts} Routed</text>
+            <text x="252" y="54" text-anchor="middle" fill="#a855f7">+ 1 Shared Expert</text>
+          </svg>
+        `;
+      } else if (tpl === 'gemma-sliding-dense') {
+        const window = meta.sliding_window || 4096;
+        return `
+          <svg viewBox="0 0 340 75" class="w-full h-18 text-cyan-300 font-mono text-[9px]">
+            <!-- Hybrid Local Sliding Block -->
+            <rect x="10" y="10" width="145" height="55" rx="6" fill="#042f2e" stroke="#0d9488" stroke-width="1.2"/>
+            <text x="82" y="26" text-anchor="middle" fill="#2dd4bf" font-weight="bold">Local Sliding SWA</text>
+            <text x="82" y="40" text-anchor="middle" fill="#99f6e4">Window: ${window}</text>
+            <text x="82" y="54" text-anchor="middle" fill="#14b8a6">${qHeads}Q / ${kvHeads}KV Heads</text>
+
+            <path d="M 155 37 L 175 37" stroke="#14b8a6" stroke-width="1.5"/>
+
+            <!-- Global Attention Block -->
+            <rect x="175" y="10" width="155" height="55" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+            <text x="252" y="26" text-anchor="middle" fill="#38bdf8" font-weight="bold">Global Dense Layer</text>
+            <text x="252" y="40" text-anchor="middle" fill="#94a3b8">d_model=${hidden}</text>
+            <text x="252" y="54" text-anchor="middle" fill="#0284c7">${layers} Total Layers</text>
+          </svg>
+        `;
+      } else if (tpl === 'mistral-swa-dense') {
+        const window = meta.sliding_window || 4096;
+        return `
+          <svg viewBox="0 0 340 75" class="w-full h-18 text-cyan-300 font-mono text-[9px]">
+            <!-- Sliding Window Attention -->
+            <rect x="10" y="10" width="150" height="55" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.2"/>
+            <text x="85" y="26" text-anchor="middle" fill="#a5b4fc" font-weight="bold">Sliding-Window GQA</text>
+            <text x="85" y="40" text-anchor="middle" fill="#c7d2fe">Window: ${window}</text>
+            <text x="85" y="54" text-anchor="middle" fill="#818cf8">${qHeads}Q / ${kvHeads}KV (${meta.gqa_ratio}:1)</text>
+
+            <path d="M 160 37 L 180 37" stroke="#6366f1" stroke-width="1.5"/>
+
+            <!-- Feed Forward Block -->
+            <rect x="180" y="10" width="150" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.2"/>
+            <text x="255" y="26" text-anchor="middle" fill="#e2e8f0" font-weight="bold">SwiGLU MLP Block</text>
+            <text x="255" y="40" text-anchor="middle" fill="#94a3b8">Hidden: ${hidden}</text>
+            <text x="255" y="54" text-anchor="middle" fill="#64748b">${layers} Total Layers</text>
+          </svg>
+        `;
+      } else {
+        // Standard LLaMA / Qwen GQA Dense
+        const gqaRatio = meta.gqa_ratio || 1.0;
+        return `
+          <svg viewBox="0 0 340 75" class="w-full h-18 text-cyan-300 font-mono text-[9px]">
+            <!-- Attention Block -->
+            <rect x="10" y="10" width="150" height="55" rx="6" fill="#0c4a6e" stroke="#0284c7" stroke-width="1.2"/>
+            <text x="85" y="26" text-anchor="middle" fill="#38bdf8" font-weight="bold">${gqaRatio > 1 ? 'Grouped-Query GQA' : 'Multi-Head MHA'}</text>
+            <text x="85" y="40" text-anchor="middle" fill="#bae6fd">${qHeads}Q / ${kvHeads}KV (${gqaRatio}:1)</text>
+            <text x="85" y="54" text-anchor="middle" fill="#0284c7">Dim: ${hidden}</text>
+
+            <path d="M 160 37 L 180 37" stroke="#0284c7" stroke-width="1.5"/>
+
+            <!-- MLP Dense Block -->
+            <rect x="180" y="10" width="150" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.2"/>
+            <text x="255" y="26" text-anchor="middle" fill="#f1f5f9" font-weight="bold">Dense FFN Block</text>
+            <text x="255" y="40" text-anchor="middle" fill="#94a3b8">RMSNorm + SwiGLU</text>
+            <text x="255" y="54" text-anchor="middle" fill="#64748b">${layers} Transformer Layers</text>
+          </svg>
+        `;
+      }
+    }
+
+    // State for pairwise selector in diff cards (defaults to first two slots)
+    let selectedDiffIndexA = 0;
+    let selectedDiffIndexB = 1;
+
+    // Helper: Render modular comparison diff cards comparing all configured models (or focused pair)
+    function renderDiffCards() {
+      const container = document.getElementById('diffCardsContainer');
+      const selectorContainer = document.getElementById('diffModelPairSelector');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      if (slots.length < 2) {
+        container.innerHTML = `
+          <div class="col-span-full p-6 rounded-2xl glass-panel text-center text-slate-400 font-mono text-xs">
+            Add at least two model slots to activate side-by-side Architectural Diff Cards (Attention, KV Cache, Recipe, Scale).
+          </div>
+        `;
+        if (selectorContainer) selectorContainer.innerHTML = '';
+        return;
+      }
+
+      // Ensure valid pair selection indices
+      if (selectedDiffIndexA >= slots.length) selectedDiffIndexA = 0;
+      if (selectedDiffIndexB >= slots.length) selectedDiffIndexB = Math.min(1, slots.length - 1);
+      if (selectedDiffIndexA === selectedDiffIndexB && slots.length > 1) {
+        selectedDiffIndexB = (selectedDiffIndexA + 1) % slots.length;
+      }
+
+      const activeSlots = slots;
+      const slotA = slots[selectedDiffIndexA] || slots[0];
+      const slotB = slots[selectedDiffIndexB] || slots[1];
+
+      // Build Interactive Pairwise Tab Switcher + All Models Contrast indicator
+      if (selectorContainer) {
+        let pairButtons = '';
+        if (slots.length > 2) {
+          pairButtons = `
+            <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
+              <span class="text-slate-400 px-2 text-[10px]">Focused Pair:</span>
+              <select id="diffSelectA" class="bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none" onchange="changeDiffPair(parseInt(this.value), selectedDiffIndexB)">
+                ${slots.map((s, idx) => `<option value="${idx}" ${idx === selectedDiffIndexA ? 'selected' : ''}>#${idx + 1} ${s.modelId.split('/').pop() || `Slot ${idx+1}`}</option>`).join('')}
+              </select>
+              <span class="text-slate-500 font-bold px-1">vs</span>
+              <select id="diffSelectB" class="bg-slate-800 border border-slate-700 text-indigo-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none" onchange="changeDiffPair(selectedDiffIndexA, parseInt(this.value))">
+                ${slots.map((s, idx) => `<option value="${idx}" ${idx === selectedDiffIndexB ? 'selected' : ''}>#${idx + 1} ${s.modelId.split('/').pop() || `Slot ${idx+1}`}</option>`).join('')}
+              </select>
+            </div>
+          `;
+        } else {
+          pairButtons = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono">
+              <span class="text-cyan-400 font-bold">#1 ${slotA.modelId.split('/').pop() || 'Model A'}</span>
+              <span class="text-slate-500 font-bold">vs</span>
+              <span class="text-indigo-400 font-bold">#2 ${slotB.modelId.split('/').pop() || 'Model B'}</span>
+            </div>
+          `;
+        }
+        selectorContainer.innerHTML = pairButtons;
+      }
+
+      // Check strict equality across ALL active model slots
+      const allAttnEqual = activeSlots.every(s => s.metadata && activeSlots[0].metadata && s.metadata.attention_type === activeSlots[0].metadata.attention_type && s.metadata.gqa_ratio === activeSlots[0].metadata.gqa_ratio);
+      const allKvEqual = activeSlots.every(s => s.metadata && activeSlots[0].metadata && s.metadata.bytes_per_token_fp16 === activeSlots[0].metadata.bytes_per_token_fp16);
+      const allRecipeEqual = activeSlots.every(s => s.metadata && activeSlots[0].metadata && s.metadata.decoder_topology === activeSlots[0].metadata.decoder_topology && s.metadata.num_hidden_layers === activeSlots[0].metadata.num_hidden_layers);
+      const allScaleEqual = activeSlots.every(s => s.metadata && activeSlots[0].metadata && s.metadata.total_parameters === activeSlots[0].metadata.total_parameters && s.metadata.active_parameters === activeSlots[0].metadata.active_parameters);
+
+      // Dynamically adapt grid columns: 2 columns for 2 models, 3 columns for 3 models, N columns with horizontal wrap
+      const gridColsCls = activeSlots.length === 2 ? 'grid-cols-2' : (activeSlots.length === 3 ? 'grid-cols-3' : 'grid-cols-2 lg:grid-cols-4');
+
+      // Helper function to render a slot's model card cell
+      const colorPalettes = [
+        { titleCls: 'text-cyan-400', borderCls: 'border-cyan-500/30' },
+        { titleCls: 'text-indigo-400', borderCls: 'border-indigo-500/30' },
+        { titleCls: 'text-amber-400', borderCls: 'border-amber-500/30' },
+        { titleCls: 'text-emerald-400', borderCls: 'border-emerald-500/30' },
+        { titleCls: 'text-fuchsia-400', borderCls: 'border-fuchsia-500/30' }
+      ];
+
+      // Card 1: AttentionDiffCard across ALL configured models
+      const attnCard = document.createElement('div');
+      attnCard.className = "p-5 rounded-2xl glass-panel space-y-3.5 border-t-2 border-t-cyan-500 flex flex-col justify-between";
+      attnCard.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">Attention Mechanism Diff</span>
+            <span class="text-[10px] text-slate-400 font-mono">(${activeSlots.length} Models)</span>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded font-bold ${allAttnEqual ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">
+            ${allAttnEqual ? 'ALL IDENTICAL' : 'VARIANTS DETECTED'}
+          </span>
+        </div>
+        <div class="grid ${gridColsCls} gap-2.5 text-xs font-mono">
+          ${activeSlots.map((s, idx) => {
+            const meta = s.metadata;
+            const short = s.modelId.split('/').pop() || `Slot #${idx + 1}`;
+            const pal = colorPalettes[idx % colorPalettes.length];
+            return `
+              <div class="p-3 rounded-xl bg-slate-900/80 border ${pal.borderCls} space-y-1.5">
+                <div class="text-[10px] font-bold ${pal.titleCls} truncate">#${idx + 1} ${short}</div>
+                <div class="text-slate-200 font-semibold text-[11px] leading-snug">${meta?.attention_type || '--'}</div>
+                <div class="text-[11px] text-slate-400">Ratio: ${meta?.gqa_ratio ? `${meta.gqa_ratio}:1` : '--'}</div>
+                <div class="text-[10px] text-slate-500">${meta ? `${meta.num_attention_heads}Q / ${meta.num_key_value_heads}KV` : '--'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="text-[10px] font-mono text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+          <span class="text-cyan-400 font-semibold">Diagnostic:</span> ${allAttnEqual ? 'All configured architectures share uniform query grouping and projection shapes.' : 'Divergent query grouping (MQA vs GQA vs MLA) determines decode memory bandwidth bottlenecks.'}
+        </div>
+      `;
+      container.appendChild(attnCard);
+
+      // Card 2: KVCacheFootprintCard across ALL configured models
+      const kvCard = document.createElement('div');
+      kvCard.className = "p-5 rounded-2xl glass-panel space-y-3.5 border-t-2 border-t-emerald-500 flex flex-col justify-between";
+      kvCard.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">KV Cache Footprint Card</span>
+            <span class="text-[10px] text-slate-400 font-mono">(${activeSlots.length} Models)</span>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded font-bold ${allKvEqual ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-purple-950 text-purple-400 border border-purple-800'}">
+            ${allKvEqual ? 'ALL IDENTICAL' : 'DIFFERENT'}
+          </span>
+        </div>
+        <div class="grid ${gridColsCls} gap-2.5 text-xs font-mono">
+          ${activeSlots.map((s, idx) => {
+            const meta = s.metadata;
+            const short = s.modelId.split('/').pop() || `Slot #${idx + 1}`;
+            const pal = colorPalettes[idx % colorPalettes.length];
+            const kbVal = meta?.kv_cache_kb_per_token ? `${meta.kv_cache_kb_per_token} KB/tok` : (meta?.bytes_per_token_fp16 ? `${(meta.bytes_per_token_fp16/1024).toFixed(2)} KB/tok` : '--');
+            const bytesVal = meta?.bytes_per_token_fp16 ? `${meta.bytes_per_token_fp16.toLocaleString()} B/tok` : '--';
+            const ctx128k = meta?.bytes_per_token_fp16 ? `~${((meta.bytes_per_token_fp16 * 131072) / 1024 / 1024 / 1024).toFixed(2)} GB` : '--';
+            return `
+              <div class="p-3 rounded-xl bg-slate-900/80 border ${pal.borderCls} space-y-1.5">
+                <div class="text-[10px] font-bold ${pal.titleCls} truncate">#${idx + 1} ${short}</div>
+                <div class="text-emerald-400 font-bold text-sm">${kbVal}</div>
+                <div class="text-[11px] text-slate-400">${bytesVal}</div>
+                <div class="text-[10px] text-slate-500">128k ctx: ${ctx128k}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="text-[10px] font-mono text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+          <span class="text-emerald-400 font-semibold">Formula:</span> 2 × Layers × KV Heads × Head Dim × Precision. Determines concurrent request density per GPU.
+        </div>
+      `;
+      container.appendChild(kvCard);
+
+      // Card 3: LayerRecipeCard across ALL configured models
+      const recipeCard = document.createElement('div');
+      recipeCard.className = "p-5 rounded-2xl glass-panel space-y-3.5 border-t-2 border-t-indigo-500 flex flex-col justify-between";
+      recipeCard.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">Layer Configuration & Recipe</span>
+            <span class="text-[10px] text-slate-400 font-mono">(${activeSlots.length} Models)</span>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded font-bold ${allRecipeEqual ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-indigo-950 text-indigo-400 border border-indigo-800'}">
+            ${allRecipeEqual ? 'ALL IDENTICAL' : 'DIFFERENT'}
+          </span>
+        </div>
+        <div class="grid ${gridColsCls} gap-2.5 text-xs font-mono">
+          ${activeSlots.map((s, idx) => {
+            const meta = s.metadata;
+            const short = s.modelId.split('/').pop() || `Slot #${idx + 1}`;
+            const pal = colorPalettes[idx % colorPalettes.length];
+            return `
+              <div class="p-3 rounded-xl bg-slate-900/80 border ${pal.borderCls} space-y-1.5">
+                <div class="text-[10px] font-bold ${pal.titleCls} truncate">#${idx + 1} ${short}</div>
+                <div class="text-slate-200 font-semibold text-[11px]">${meta?.decoder_topology || '--'}</div>
+                <div class="text-[11px] text-slate-400">${meta?.num_hidden_layers || '--'} Transformer Layers</div>
+                <div class="text-[10px] text-indigo-300 leading-snug line-clamp-2" title="${meta?.layer_recipe || ''}">${meta?.layer_recipe || '--'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="text-[10px] font-mono text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+          <span class="text-indigo-400 font-semibold">Topology:</span> Evaluates dense sliding-window vs standard causal vs fine-grained sparse MoE routing.
+        </div>
+      `;
+      container.appendChild(recipeCard);
+
+      // Card 4: ScaleAndParamsCard across ALL configured models
+      const scaleCard = document.createElement('div');
+      scaleCard.className = "p-5 rounded-2xl glass-panel space-y-3.5 border-t-2 border-t-violet-500 flex flex-col justify-between";
+      scaleCard.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">Compute Scale (Active vs Total)</span>
+            <span class="text-[10px] text-slate-400 font-mono">(${activeSlots.length} Models)</span>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded font-bold ${allScaleEqual ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-violet-950 text-violet-400 border border-violet-800'}">
+            ${allScaleEqual ? 'ALL IDENTICAL' : 'DIFFERENT'}
+          </span>
+        </div>
+        <div class="grid ${gridColsCls} gap-2.5 text-xs font-mono">
+          ${activeSlots.map((s, idx) => {
+            const meta = s.metadata;
+            const short = s.modelId.split('/').pop() || `Slot #${idx + 1}`;
+            const pal = colorPalettes[idx % colorPalettes.length];
+            return `
+              <div class="p-3 rounded-xl bg-slate-900/80 border ${pal.borderCls} space-y-1.5">
+                <div class="text-[10px] font-bold ${pal.titleCls} truncate">#${idx + 1} ${short}</div>
+                <div class="text-slate-200 font-bold text-[11px]">Active: ${meta?.active_parameters || meta?.parameter_count || '--'}</div>
+                <div class="text-[11px] text-slate-400">Total: ${meta?.total_parameters || meta?.parameter_count || '--'}</div>
+                <div class="text-[10px] text-slate-500">VRAM: ${meta?.weight_memory_fp16_gb ? `~${meta.weight_memory_fp16_gb} GB` : '--'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="text-[10px] font-mono text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+          <span class="text-violet-400 font-semibold">Active Compute:</span> In MoE architectures, active parameters drive inference FLOPs while total parameters dictate VRAM requirements.
+        </div>
+      `;
+      container.appendChild(scaleCard);
+    }
+
+    function changeDiffPair(idxA, idxB) {
+      selectedDiffIndexA = idxA;
+      selectedDiffIndexB = idxB;
+      renderDiffCards();
+    }
+
+    function renderOutputs() {
+      const container = document.getElementById('outputsContainer');
+      container.innerHTML = '';
+
+      slots.forEach((slot, index) => {
+        const col = document.createElement('div');
+        col.className = "p-5 rounded-2xl glass-panel space-y-4 border-t-2 border-t-cyan-500 flex flex-col justify-between";
+        col.id = `outputCol_${slot.id}`;
+
+        const shortName = slot.modelId.split('/').pop() || `Slot ${index + 1}`;
+        const meta = slot.metadata;
+        const metrics = slot.metrics;
+
+        const svgDiagram = getArchitectureSvg(meta);
+
+        col.innerHTML = `
+          <div class="space-y-3">
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-cyan-400"></span>
+                <span class="text-xs font-mono font-bold text-slate-200 truncate max-w-[190px]" title="${slot.modelId}">${shortName}</span>
+              </div>
+              <span id="badge_${slot.id}" class="text-[10px] font-mono px-2 py-0.5 rounded ${getStatusBadgeClass(slot.status)}">
+                ${slot.status}
+              </span>
+            </div>
+
+            <!-- Static Architecture Specs Card -->
+            <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 text-xs font-mono">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                <span>Architecture & Static Specs</span>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-semibold">${meta?.decoder_topology || 'Dense'}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div><span class="text-slate-500">Active Params:</span> <span class="text-slate-200 font-semibold">${meta?.active_parameters || meta?.parameter_count || '--'}</span></div>
+                <div><span class="text-slate-500">Total Scale:</span> <span class="text-slate-200 font-semibold">${meta?.total_parameters || meta?.parameter_count || '--'}</span></div>
+                <div><span class="text-slate-500">Context:</span> <span class="text-slate-200 font-semibold">${meta?.context_window ? meta.context_window.toLocaleString() : '--'}</span></div>
+                <div><span class="text-slate-500">KV Footprint:</span> <span class="text-emerald-400 font-semibold">${meta?.kv_cache_kb_per_token ? `${meta.kv_cache_kb_per_token} KB/tok` : (meta?.bytes_per_token_fp16 ? `${meta.bytes_per_token_fp16.toLocaleString()} B` : '--')}</span></div>
+                <div><span class="text-slate-500">Hidden / Layers:</span> <span class="text-slate-200 font-semibold">${meta ? `${meta.hidden_size} / L${meta.num_hidden_layers}` : '--'}</span></div>
+                <div><span class="text-slate-500">Q / KV Heads:</span> <span class="text-slate-200 font-semibold">${meta ? `${meta.num_attention_heads}Q / ${meta.num_key_value_heads}KV` : '--'}</span></div>
+              </div>
+            </div>
+
+            <!-- Visual Architecture Block Diagram -->
+            <div class="p-2.5 rounded-xl bg-black/60 border border-slate-800/80">
+              <div class="text-[9px] font-mono uppercase text-slate-500 font-semibold mb-1 flex justify-between">
+                <span>Block Pipeline Topology</span>
+                <span class="text-slate-400 lowercase">${meta?.architecture_template || 'pipeline'}</span>
+              </div>
+              <div class="w-full flex justify-center items-center py-0.5">
+                ${svgDiagram}
+              </div>
+            </div>
+
+            <!-- Runtime Latency KPI Cards -->
+            <div class="grid grid-cols-3 gap-1.5 text-center font-mono">
+              <div class="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div class="text-[9px] text-slate-500 uppercase">TTFT</div>
+                <div id="ttft_${slot.id}" class="text-xs font-bold text-amber-400">${metrics ? `${metrics.ttft_ms.toFixed(1)} ms` : '-- ms'}</div>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div class="text-[9px] text-slate-500 uppercase">TPS</div>
+                <div id="tps_${slot.id}" class="text-xs font-bold text-emerald-400">${metrics ? `${metrics.tps.toFixed(1)} tps` : '-- tps'}</div>
+              </div>
+              <div class="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div class="text-[9px] text-slate-500 uppercase">Latency</div>
+                <div id="lat_${slot.id}" class="text-xs font-bold text-violet-400">${metrics ? `${(metrics.total_latency_ms/1000).toFixed(2)} s` : '-- s'}</div>
+              </div>
+            </div>
+
+            <!-- Raw Streaming Output Terminal -->
+            <div id="screen_${slot.id}" class="h-56 w-full bg-black/90 rounded-xl p-3 font-mono text-xs overflow-y-auto leading-relaxed border ${slot.status === 'ERROR' ? 'border-red-600/60 shadow-red-950/20' : 'border-slate-800'} shadow-inner whitespace-pre-wrap select-text"></div>
+          </div>
+
+          <div class="flex justify-between items-center text-[10px] font-mono text-slate-400 pt-2 border-t border-slate-800/60">
+            <span id="tokens_${slot.id}">Tokens: ${metrics?.token_count || 0}</span>
+            <span id="cost_${slot.id}">${meta?.weight_memory_fp16_gb ? `~${meta.weight_memory_fp16_gb} GB VRAM` : 'Cost: Pay-per-token'}</span>
+          </div>
+        `;
+        container.appendChild(col);
+
+        // Populate terminal text safely
+        const scr = col.querySelector(`#screen_${slot.id}`);
+        if (scr) {
+          if (slot.status === "ERROR" && slot.errorDiag) {
+            const diag = slot.errorDiag;
+            scr.className = "h-56 w-full bg-slate-950/95 rounded-xl p-3 font-mono text-xs overflow-y-auto leading-relaxed border border-red-500/50 shadow-inner select-text space-y-2.5";
+            scr.innerHTML = `
+              <div class="flex items-center justify-between pb-1.5 border-b border-red-900/60">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800 tracking-wide uppercase">
+                  ${diag.badge || 'INFERENCE ERROR'}
+                </span>
+                <span class="text-[10px] text-red-400/80 font-bold font-mono">
+                  ${diag.status_code ? `HTTP ${diag.status_code}` : 'CLIENT / NET ERROR'}
+                </span>
+              </div>
+
+              <div class="space-y-1.5 text-[11px]">
+                <div>
+                  <span class="text-slate-400 font-semibold block text-[10px] uppercase tracking-wider">Diagnostic Reason:</span>
+                  <span class="text-red-200 font-medium">${diag.summary || slot.errorMsg || 'Inference call failed'}</span>
+                </div>
+
+                <div class="p-2 rounded-lg bg-black/60 border border-slate-800 text-[10px] space-y-1">
+                  <div class="text-slate-400"><span class="text-slate-500 uppercase font-semibold">Root Cause:</span> <span class="text-slate-300">${diag.root_cause || slot.errorMsg || 'Unknown'}</span></div>
+                  ${diag.fix_suggestion ? `
+                    <div class="text-amber-300 pt-1 border-t border-slate-800/80">
+                      <span class="font-bold text-amber-400">Resolution Hint:</span> ${diag.fix_suggestion}
+                    </div>
+                  ` : ''}
+                </div>
+
+                ${slot.endpoint ? `
+                  <div class="text-[9px] text-slate-500 truncate" title="${slot.endpoint}">
+                    Endpoint: <span class="text-slate-400 font-mono">${slot.endpoint}</span>
+                  </div>
+                ` : ''}
+
+                ${slot.rawError ? `
+                  <details class="text-[10px] text-slate-500 cursor-pointer pt-0.5">
+                    <summary class="hover:text-slate-300 font-semibold text-[9px] uppercase">View Upstream Raw Response</summary>
+                    <pre class="mt-1 p-2 rounded bg-black text-slate-400 text-[9px] max-h-24 overflow-y-auto whitespace-pre-wrap border border-slate-900">${slot.rawError}</pre>
+                  </details>
+                ` : ''}
+              </div>
+            `;
+          } else if (slot.streamText) {
+            scr.textContent = slot.streamText;
+            scr.className = "h-56 w-full bg-black/90 rounded-xl p-3 font-mono text-xs text-cyan-300 overflow-y-auto leading-relaxed border border-slate-800 shadow-inner whitespace-pre-wrap select-text";
+          } else {
+            scr.innerHTML = '<span class="text-slate-600">// Live generation output will appear here...</span>';
+            scr.className = "h-56 w-full bg-black/90 rounded-xl p-3 font-mono text-xs text-cyan-300 overflow-y-auto leading-relaxed border border-slate-800 shadow-inner whitespace-pre-wrap select-text";
+          }
+        }
+      });
+    }
+
+    function getStatusBadgeClass(status) {
+      if (status === "STREAMING") return "bg-amber-950 text-amber-400 border border-amber-800";
+      if (status === "COMPLETED") return "bg-emerald-950 text-emerald-400 border border-emerald-800";
+      if (status === "ERROR") return "bg-red-950 text-red-400 border border-red-800";
+      return "bg-slate-800 text-slate-400 border border-slate-700";
+    }
+
+    function renderMatrix() {
+      const headerRow = document.getElementById('matrixHeaderRow');
+      headerRow.innerHTML = `<th class="p-3.5 w-64 uppercase tracking-wider text-slate-400 font-semibold">Architectural Feature</th>`;
+
+      slots.forEach((slot, index) => {
+        const th = document.createElement('th');
+        th.className = "p-3.5 font-bold text-cyan-400 border-l border-slate-800/80";
+        th.textContent = slot.modelId.split('/').pop() || `Model ${index + 1}`;
+        headerRow.appendChild(th);
+      });
+
+      const featureRows = [
+        { label: "Decoder Topology", getVal: s => s.metadata?.decoder_topology || "Dense", cls: "text-cyan-300 font-semibold" },
+        { label: "Active Parameters", getVal: s => s.metadata?.active_parameters || s.metadata?.parameter_count || "--", cls: "text-slate-100 font-bold" },
+        { label: "Total Scale / Parameters", getVal: s => s.metadata?.total_parameters || s.metadata?.parameter_count || "--", cls: "text-slate-200 font-semibold" },
+        { label: "Attention Mechanism", getVal: s => s.metadata?.attention_type || "--", cls: "text-cyan-300 font-semibold" },
+        { label: "KV Cache Footprint (KB/tok)", getVal: s => s.metadata?.kv_cache_kb_per_token ? `${s.metadata.kv_cache_kb_per_token} KB/tok` : (s.metadata?.bytes_per_token_fp16 ? `${(s.metadata.bytes_per_token_fp16/1024).toFixed(2)} KB/tok` : "--"), cls: "text-emerald-400 font-bold" },
+        { label: "MQA / GQA Compression Ratio", getVal: s => s.metadata?.gqa_ratio ? `${s.metadata.gqa_ratio}:1` : "1:1", cls: "text-slate-300 font-mono" },
+        { label: "Context Window", getVal: s => s.metadata?.context_window ? `${s.metadata.context_window.toLocaleString()} tokens` : "--", cls: "text-slate-300" },
+        { label: "Layer Recipe & Configuration", getVal: s => s.metadata?.layer_recipe || (s.metadata?.num_hidden_layers ? `${s.metadata.num_hidden_layers} Layers` : "--"), cls: "text-slate-300 font-mono text-[11px]" },
+        { label: "Hidden Size (d_model)", getVal: s => s.metadata?.hidden_size || "--", cls: "text-slate-300" },
+        { label: "Layer Count (L)", getVal: s => s.metadata?.num_hidden_layers || "--", cls: "text-slate-300" },
+        { label: "Query / KV Heads", getVal: s => s.metadata ? `${s.metadata.num_attention_heads} Q / ${s.metadata.num_key_value_heads} KV` : "--", cls: "text-slate-300" },
+        { label: "Bytes / Token (FP16)", getVal: s => s.metadata?.bytes_per_token_fp16 ? `${s.metadata.bytes_per_token_fp16.toLocaleString()} B` : "--", cls: "text-emerald-400 font-semibold" },
+        { label: "TTFT (ms)", getVal: s => s.metrics ? `${s.metrics.ttft_ms.toFixed(1)} ms` : "--", cls: "text-amber-400 font-bold", rowBg: "bg-amber-950/10" },
+        { label: "Tokens Per Second (TPS)", getVal: s => s.metrics ? `${s.metrics.tps.toFixed(1)} tok/s` : "--", cls: "text-emerald-400 font-extrabold", rowBg: "bg-emerald-950/10" },
+        { label: "Total Latency (ms)", getVal: s => s.metrics ? `${s.metrics.total_latency_ms.toFixed(1)} ms` : "--", cls: "text-violet-400 font-bold", rowBg: "bg-violet-950/10" }
+      ];
+
+      const tbody = document.getElementById('matrixTbody');
+      tbody.innerHTML = '';
+
+      featureRows.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.className = `hover:bg-slate-800/20 ${f.rowBg || ''}`;
+
+        let html = `<td class="p-3.5 font-semibold text-slate-400 bg-slate-900/40">${f.label}</td>`;
+        slots.forEach(slot => {
+          html += `<td class="p-3.5 border-l border-slate-800/80 ${f.cls}">${f.getVal(slot)}</td>`;
+        });
+
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateSlotField(slotId, field, val) {
+      const slot = slots.find(s => s.id === slotId);
+      if (slot) {
+        slot[field] = val;
+        if (field === "modelId") {
+          const lbl = document.getElementById(`label_${slotId}`);
+          if (lbl) lbl.textContent = val.split('/').pop() || 'Model Slot';
+        }
+      }
+    }
+
+    function addSlot() {
+      const newId = `slot_${nextSlotCounter++}`;
+      slots.push({
+        id: newId,
+        modelId: "",
+        apiBase: "",
+        apiKey: "",
+        metadata: null,
+        metrics: null,
+        streamText: "",
+        status: "IDLE"
+      });
+      renderSlots();
+    }
+
+    function removeSlot(slotId) {
+      if (slots.length <= 1) return;
+      slots = slots.filter(s => s.id !== slotId);
+      renderSlots();
+    }
+
+    function toggleKeyVisibility(elemId, btn) {
+      const inp = document.getElementById(elemId);
+      if (inp.type === "password") {
+        inp.type = "text";
+        btn.textContent = "HIDE";
+      } else {
+        inp.type = "password";
+        btn.textContent = "SHOW";
+      }
+    }
+
+    async function inspectSlotMetadata(slotId) {
+      const slot = slots.find(s => s.id === slotId);
+      if (!slot) return;
+
+      const globalHf = document.getElementById('globalHfToken').value.trim();
+      const token = slot.apiKey || globalHf;
+
+      const metaStatus = document.getElementById(`metaStatus_${slotId}`);
+      if (metaStatus) metaStatus.textContent = "Fetching...";
+
+      try {
+        let url = `/api/model/metadata?model_id=${encodeURIComponent(slot.modelId)}`;
+        if (token) url += `&hf_token=${encodeURIComponent(token)}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          const errData = await resp.json();
+          throw new Error(errData.detail || `HTTP ${resp.status}`);
+        }
+        const meta = await resp.json();
+        slot.metadata = meta;
+        if (metaStatus) metaStatus.textContent = "✓ Loaded";
+        renderOutputs();
+        renderDiffCards();
+        renderMatrix();
+      } catch (err) {
+        if (metaStatus) metaStatus.textContent = "✕ Error";
+        const desc = document.getElementById('statusDesc');
+        desc.textContent = `[${slot.modelId}] ${err.message}`;
+        alert(`Failed to fetch metadata for ${slot.modelId}:\n${err.message}`);
+      }
+    }
+
+    async function inspectAllMetadata() {
+      const statusTitle = document.getElementById('statusTitle');
+      const statusDesc = document.getElementById('statusDesc');
+      const statusBadge = document.getElementById('statusBadge');
+
+      statusTitle.textContent = "Inspecting Metadata across all configured model slots...";
+      statusBadge.textContent = "INSPECTING";
+      statusBadge.className = "text-xs font-mono px-3 py-1 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-800";
+
+      await Promise.all(slots.map(s => inspectSlotMetadata(s.id)));
+
+      statusTitle.textContent = `Metadata Inspection Complete (${slots.length} models)`;
+      statusDesc.textContent = "Architecture specifications loaded and formatted in side-by-side cards.";
+      statusBadge.textContent = "READY";
+      statusBadge.className = "text-xs font-mono px-3 py-1 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-800";
+    }
+
+    async function runBenchmark() {
+      const prompt = document.getElementById('globalPrompt').value.trim();
+      const systemPrompt = document.getElementById('globalSystemPrompt').value.trim();
+      const globalHf = document.getElementById('globalHfToken').value.trim();
+      const temp = 0.7;
+      const maxTokens = 256;
+      const topP = 0.95;
+
+      if (!prompt) {
+        alert("Please enter a benchmark prompt.");
+        return;
+      }
+
+      // Check if at least one model has a model_id specified
+      const activeSlots = slots.filter(s => s.modelId.trim() !== "");
+      if (activeSlots.length === 0) {
+        alert("Please specify a Model ID / Repo Path for at least one model slot.");
+        return;
+      }
+
+      // Reset slot states
+      slots.forEach(s => {
+        s.status = "STREAMING";
+        s.streamText = "";
+        s.metrics = null;
+        s.errorDiag = null;
+        s.errorMsg = null;
+        s.rawError = null;
+        s.endpoint = null;
+      });
+      renderOutputs();
+
+      const startTime = performance.now();
+      const timerInterval = setInterval(() => {
+        const el = (performance.now() - startTime) / 1000;
+        document.getElementById('elapsedGlobalTimer').textContent = `Elapsed: ${el.toFixed(2)}s`;
+      }, 50);
+
+      const modelsPayload = slots.map((s, idx) => ({
+        slot_id: s.id,
+        model_id: s.modelId || `unspecified-model-${idx + 1}`,
+        api_base: s.apiBase || "https://api-inference.huggingface.co/v1/",
+        api_key: s.apiKey || globalHf || "",
+        hf_token: s.apiKey || globalHf || null
+      }));
+
+      const requestBody = {
+        models: modelsPayload,
+        prompt: prompt,
+        system_prompt: systemPrompt || null,
+        max_tokens: maxTokens,
+        temperature: temp,
+        top_p: topP,
+        global_hf_token: globalHf || null
+      };
+
+      try {
+        const response = await fetch('/api/benchmark/compare/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop();
+
+          for (const rawEvent of events) {
+            const lines = rawEvent.split("\n");
+            let eventType = "";
+            let dataStr = "";
+
+            for (const line of lines) {
+              if (line.startsWith("event:")) eventType = line.slice(6).trim();
+              if (line.startsWith("data:")) dataStr = line.slice(5).trim();
+            }
+
+            if (!eventType || !dataStr) continue;
+            const data = JSON.parse(dataStr);
+            const slot = slots.find(s => s.id === data.slot_id);
+
+            if (eventType === "metadata") {
+              if (slot) {
+                slot.metadata = data.metadata;
+                renderOutputs();
+                renderDiffCards();
+                renderMatrix();
+              }
+            } else if (eventType === "ttft") {
+              if (slot) {
+                const ttftEl = document.getElementById(`ttft_${slot.id}`);
+                if (ttftEl) ttftEl.textContent = `${data.ttft_ms.toFixed(1)} ms`;
+              }
+            } else if (eventType === "token") {
+              if (slot) {
+                slot.streamText += data.token;
+                const screen = document.getElementById(`screen_${slot.id}`);
+                if (screen) {
+                  screen.textContent = slot.streamText;
+                  screen.scrollTop = screen.scrollHeight;
+                }
+                const tpsEl = document.getElementById(`tps_${slot.id}`);
+                if (tpsEl) tpsEl.textContent = `${data.tps.toFixed(1)} tps`;
+                const tokensEl = document.getElementById(`tokens_${slot.id}`);
+                if (tokensEl) tokensEl.textContent = `Tokens: ${data.token_count}`;
+              }
+            } else if (eventType === "completed") {
+              if (slot) {
+                slot.status = "COMPLETED";
+                slot.metrics = data;
+                if (data.generated_text && (!slot.streamText || slot.streamText.trim() === "")) {
+                  slot.streamText = data.generated_text;
+                }
+                renderOutputs();
+                renderDiffCards();
+                renderMatrix();
+              }
+            } else if (eventType === "error") {
+              if (slot) {
+                slot.status = "ERROR";
+                slot.errorMsg = data.error;
+                slot.errorDiag = data.error_diagnostic || {
+                  badge: "INFERENCE ERROR",
+                  summary: data.error,
+                  root_cause: data.raw_error || data.error,
+                  fix_suggestion: "Check your model ID, endpoint URL, or authorization token."
+                };
+                slot.rawError = data.raw_error || "";
+                slot.endpoint = data.endpoint || slot.apiBase;
+                renderOutputs();
+              }
+            }
+          }
+        }
+
+        clearInterval(timerInterval);
+      } catch (err) {
+        clearInterval(timerInterval);
+        alert(`Benchmark failure: ${err.message}`);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Toggle system prompt
+      document.getElementById('toggleSystemPromptBtn').addEventListener('click', () => {
+        const c = document.getElementById('systemPromptContainer');
+        c.classList.toggle('hidden');
+      });
+
+      // Global token toggle
+      document.getElementById('toggleGlobalHfTokenBtn').addEventListener('click', () => {
+        toggleKeyVisibility('globalHfToken', document.getElementById('toggleGlobalHfTokenBtn'));
+      });
+
+      // Add slot button
+      document.getElementById('addSlotBtn').addEventListener('click', addSlot);
+
+      // Inspect & Run buttons (only 2 action buttons)
+      document.getElementById('inspectAllMetadataBtn').addEventListener('click', inspectAllMetadata);
+      document.getElementById('runBenchmarkBtn').addEventListener('click', () => runBenchmark());
+
+      // Initial render
+      renderSlots();
+    });
+  </script>
+</body>
+</html>
